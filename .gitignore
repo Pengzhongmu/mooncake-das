@@ -1,6 +1,7 @@
 .cache
 .vscode
 build
+build-stability*
 build_ofed4
 old
 local_test
@@ -209,3 +210,6 @@ core_*
 # MacOS
 .DS_Store
 .envrc
+
+# Local multi-node cluster topology (contains site-specific IPs)
+scripts/hygon/store_cluster.conf

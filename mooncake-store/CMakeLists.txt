@@ -66,6 +66,12 @@ if (STORE_USE_ETCD)
     add_subdirectory(tools)
 endif()
 
+# Store stability tooling lives under mooncake-store; keep it independent from
+# BUILD_UNIT_TESTS so SHCA/ASan builds can enable it without building gtest.
+if (BUILD_STORE_STABILITY_TESTS)
+    add_subdirectory(tests/stability)
+endif()
+
 # Test-only private access support, also used by the eviction benchmark. Never
 # link this library into the production master service.
 if(BUILD_UNIT_TESTS OR BUILD_BENCHMARK)

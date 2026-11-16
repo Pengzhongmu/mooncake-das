@@ -18,6 +18,8 @@ endif()
 
 option(WITH_TE "build mooncake transfer engine and sample code" ON)
 option(WITH_STORE "build mooncake store library and sample code" ON)
+option(BUILD_STORE_STABILITY_TESTS
+       "build Mooncake Store stability test tooling" OFF)
 option(WITH_STORE_GO "build Go bindings for mooncake store" OFF)
 option(WITH_CONDUCTOR "build mooncake conductor service" OFF)
 option(WITH_P2P_STORE "build p2p store library and sample code" OFF)

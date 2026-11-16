@@ -1,0 +1,21 @@
+# LeakSanitizer 抑制规则（稳定性测试专用）
+# 抑制第三方库/驱动在进程生命周期内一次性分配、退出才释放的“良性泄漏”，
+# 避免淹没真正的应用层泄漏。命中规则的对象不计入泄漏报告。
+#
+# 语法：leak:<函数名或库名子串>。按需增补，先严后松。
+
+# --- RDMA / ibverbs 驱动（设备枚举时一次性分配）---
+leak:ibv_get_device_list
+leak:libibverbs
+leak:libshca
+
+# --- etcd Go c-shared（Go runtime 常驻分配，非应用泄漏）---
+leak:libetcd_wrapper
+
+# --- glog / gflags 单例（进程级，退出才释放）---
+leak:google::InitGoogleLogging
+leak:google::glog_internal_namespace_
+
+# --- AWS SDK（S3 后端初始化的进程级单例）---
+leak:Aws::InitAPI
+leak:aws-cpp-sdk-core

@@ -1,0 +1,160 @@
+# Mooncake Store multi-node cluster topology.
+#
+# Copy this file to store_cluster.conf and edit the addresses/roles:
+#
+#   cp scripts/hygon/store_cluster.conf.example scripts/hygon/store_cluster.conf
+#
+# Then run:
+#
+#   bash scripts/hygon/start_store_cluster.sh -c scripts/hygon/store_cluster.conf check
+#   bash scripts/hygon/start_store_cluster.sh -c scripts/hygon/store_cluster.conf start
+#   bash scripts/hygon/start_store_cluster.sh -c scripts/hygon/store_cluster.conf status
+#   bash scripts/hygon/start_store_cluster.sh -c scripts/hygon/store_cluster.conf stop
+#
+# ---------------------------------------------------------------------------
+# Global settings (single-token key=value lines, optional)
+# ---------------------------------------------------------------------------
+# Directory used on every node for logs and PID files. Must be absolute.
+run_dir=/tmp/mooncake-store-cluster
+
+# Binary names or absolute paths. Bare names are resolved through PATH; use
+# absolute paths for a build tree, or leave the defaults for a wheel install.
+# "client" entries run mooncake_test (the HTTP KV test tool).
+master_bin=/workspace/mooncake-das/build/mooncake-store/src/mooncake_master
+client_bin=/workspace/mooncake-das/build/mooncake-store/tests/stability/mooncake-test/mooncake_test
+
+# SSH settings for remote nodes. Hosts named "local", "localhost", or
+# "127.0.0.1" run directly on the control node without SSH.
+# The host mappings below use node hostnames from /etc/hosts
+# (a12r4n12 / a12r2n20 / a12r2n19 / a12r2n18), not local SSH aliases.
+# Use the account that has passwordless SSH and Docker permission on all nodes.
+ssh_user=huojianqiang
+ssh_port=22
+# If the script runs inside a container without mounted /root/.ssh, put the
+# key on the shared workspace and point to it:
+# ssh_key=/workspace/keys/id_rsa
+# ssh_options=-o StrictHostKeyChecking=no -o ConnectTimeout=10
+
+# Global fallback container name when a host has no per-host mapping.
+# Prefer the `host` mappings below when each node uses a different container.
+container=
+
+# Kill existing mooncake_master / mooncake_test / mooncake_client processes on
+# each target host/container after dependency checks and before starting.
+kill_existing=1
+
+# mooncake_test (client) defaults.
+# For SHCA/RDMA set protocol=rdma and device_names=shca_0 (or your device).
+# global_segment_size/local_buffer_size accept bytes or a K/M/G/T suffix; the
+# script converts them to the byte values expected by mooncake_test.
+# Per-client values in the role lines below override these defaults.
+# Set global_segment_size=0 for a pure client (then put needs another node
+# that contributes a segment).
+protocol=rdma
+device_names=shca_0
+global_segment_size=4GB
+local_buffer_size=256MB
+
+# HTTP KV service exposed by each mooncake_test instance. The <port> column in
+# the role lines below is --http-port, so several instances can share a node.
+# http_threads is the number of HTTP worker threads per instance and thus the
+# server-side concurrency limit: mooncake_test handlers call the client
+# synchronously, so each thread can serve one in-flight request at a time.
+http_host=0.0.0.0
+http_threads=8
+min_put_size_mb=1.0
+max_put_size_mb=16.0
+enable_zerocopy=0
+zerocopy_recv_pool_mb=512.0
+
+# Unset HTTP(S) proxy variables on the target nodes before launching.
+# Default: 0 (keep the caller's proxy environment); set to 1 for direct
+# cluster traffic.
+unset_proxy=0
+
+# Wait for mooncake_test's HTTP /health endpoint to report ready=true.
+# Set to 0 only if the client binary does not expose /health.
+client_health_check=1
+
+# Serialize start/stop/restart on the control node. Set lock_file= to disable.
+lock_file=/tmp/mooncake-store-cluster.lock
+lock_timeout=30
+
+# Optional RDMA NIC allow/deny lists, exported as MC_TE_FILTERS and
+# MC_TE_FILTERS_EXCLUDE on every master/mooncake_test process.
+# te_filters=shca_0
+# te_filters_exclude=
+
+# Optional runtime setup. /opt/dtk/env.sh is sourced when it exists.
+# For this build tree, keep the build library directories in the search path.
+ld_library_path=/workspace/mooncake-das/build/mooncake-store/src:/workspace/mooncake-das/build/mooncake-store/tests/stability/mooncake-test:/workspace/mooncake-das/build/mooncake-transfer-engine/src:/workspace/mooncake-das/build/mooncake-common/src:/workspace/mooncake-das/build/mooncake-common
+env_file=/opt/dtk/env.sh
+
+# Master/client addresses are derived from the master entry below.
+# Override them when the master is managed outside this config, or when the
+# metadata port is not 8080.
+# master_server_address=10.1.12.72:50051
+# metadata_server=http://10.1.12.72:8080/metadata
+
+# Seconds to wait for a service port after start, and for SIGTERM before KILL.
+start_timeout=30
+stop_timeout=15
+
+# Set to 1 only if you really want multiple master entries (for example HA).
+allow_multiple_masters=0
+
+# ---------------------------------------------------------------------------
+# Host mappings:
+#   host <hostname|local> <node_ip> <container|->
+
+# Remote hostnames come from /etc/hosts:
+#   a12r2n20 / a12r2n19 / a12r2n18
+# "local" + container means the script runs on this node's host and enters the
+# container with docker exec. "local" without a container runs directly in the
+# current environment (for example when the script itself runs in the container).
+host local 10.1.12.72 pzm_xunfei_1106
+host a12r2n20 10.1.12.40 pzm_xunfei_1111
+host a12r2n19 10.1.12.39 pzm_xunfei
+host a12r2n18 10.1.12.38 pzm_xunfei
+
+# If the script runs inside the a12r4n12 container instead of on its host,
+# replace the line above with:
+# host a12r4n12 10.1.12.72 -
+# and use: master a12r4n12 50051 ...
+
+# ---------------------------------------------------------------------------
+# Role entries:
+#   master <hostname|local> <port> [extra gflags...]
+#   client <hostname|local> <http_port> [segment_size] [local_buffer_size] [extra gflags...]
+#
+# For clients, segment_size/local_buffer_size accept bytes or a K/M/G/T suffix.
+# If omitted, the global global_segment_size / local_buffer_size values above
+# are used. Defaults are 4GB segment and 256MB local buffer.
+# Each client line is one mooncake_test instance; repeat a line with a different
+# HTTP port to run multiple clients on one node. Each client entry starts
+# mooncake_test, not mooncake_client.
+# Extra arguments are whitespace-separated and are appended to the generated
+# command. For the master (gflags) they can override the defaults above. For
+# clients (mooncake_test, parsed by CLI11) never repeat an option the script
+# already passes (e.g. --http-threads): CLI11 rejects duplicates with
+# "At most 1 required but received 2". Use the global keys above instead.
+#
+# The <port>/<http_port> column is the master rpc_port / mooncake_test HTTP port.
+# Do not override --rpc_port/--http-port (or --local-hostname) in extra
+# arguments; use the columns above so readiness checks and PID files stay consistent.
+# ---------------------------------------------------------------------------
+
+# local (host a12r4n12): master inside pzm_xunfei_1106.
+master local 50051 --metrics_port=19003 --enable_http_metadata_server=true
+
+# a12r2n20 runs two clients with different HTTP ports, segment and local buffer.
+# a12r2n19 uses defaults (4GB / 256MB); a12r2n18 overrides both.
+client a12r2n20 18080 4GB 256MB
+client a12r2n20 18081 2GB 512MB
+client a12r2n19 18080              # defaults: 4GB / 256MB
+client a12r2n18 18080 1GB 1GB
+
+# Local-only example (useful for a quick single-node test):
+# master local 50051 --enable_http_metadata_server=true
+# client local 18080 4GB 256MB
+# client local 18081 2GB 512MB
